@@ -97,7 +97,7 @@ contract AssetToken is ERC20 {
         // newExchangeRate = oldExchangeRate * (totalSupply + fee) / totalSupply
         // newExchangeRate = 1 (4 + 0.5) / 4
         // newExchangeRate = 1.125
-        //@audit too many storage raad  -> store in memnory variable
+        //@audit too many storage read  -> store in memnory variable
         //Question what is totalSupply is zero?
         uint256 newExchangeRate = (s_exchangeRate * (totalSupply() + fee)) /
             totalSupply();

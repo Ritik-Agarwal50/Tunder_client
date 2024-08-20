@@ -95,6 +95,7 @@ contract ThunderLoan is
     );
     error ThunderLoan__CallerIsNotContract();
     error ThunderLoan__AlreadyAllowed();
+    //@audit this is unused error statement in the code. It should be removed.
     error ThunderLoan__ExhangeRateCanOnlyIncrease();
     error ThunderLoan__NotCurrentlyFlashLoaning();
     error ThunderLoan__BadNewFee();
@@ -108,11 +109,13 @@ contract ThunderLoan is
     mapping(IERC20 => AssetToken) public s_tokenToAssetToken;
 
     // The fee in WEI, it should have 18 decimals. Each flash loan takes a flat fee of the token price.
+    //@audit Info:: This should be constant and immutable.
     uint256 private s_feePrecision;
+    //@audit Info::
     uint256 private s_flashLoanFee; // 0.3% ETH fee
 
     mapping(IERC20 token => bool currentlyFlashLoaning)
-        private s_currentlyFlashLoaning;
+        private s_currentlyFlashLoaning; // e mapping tells us if a token is currently being flash loaned
 
     /*//////////////////////////////////////////////////////////////
                                  EVENTS
@@ -166,11 +169,15 @@ contract ThunderLoan is
         _disableInitializers();
     }
 
+    // CHECKED TILL HERE
+
+
     /*//////////////////////////////////////////////////////////////
                            EXTERNAL FUNCTIONS
     //////////////////////////////////////////////////////////////*/
 
     //@audit low:: initializes can be front run.
+    // 
     function initialize(address tswapAddress) external initializer {
         __Ownable_init(msg.sender);
         __UUPSUpgradeable_init();
@@ -179,18 +186,24 @@ contract ThunderLoan is
         s_flashLoanFee = 3e15; // 0.3% ETH fee
     }
 
+    //@audit Info::Where is the netspec??
+    //@audit follow up this is something sus happening!!!!!!! 
     function deposit(
         IERC20 token,
         uint256 amount
     ) external revertIfZero(amount) revertIfNotAllowedToken(token) {
         AssetToken assetToken = s_tokenToAssetToken[token];
-        uint256 exchangeRate = assetToken.getExchangeRate();
+        uint256 exchangeRate = assetToken.getExchangeRate(); // e shows the exchange rate
         uint256 mintAmount = (amount * assetToken.EXCHANGE_RATE_PRECISION()) /
             exchangeRate;
         emit Deposit(msg.sender, token, amount);
         assetToken.mint(msg.sender, mintAmount);
+        //Question why we are calcultaing flash loans fees in deposite function???
         uint256 calculatedFee = getCalculatedFee(token, amount);
+        //Question Why we are changing the Excahnge rate???
+        //Question is exchange rate should be the constant?
         assetToken.updateExchangeRate(calculatedFee);
+        // e if the liquidty provider depo the $ sites in the assest token contract! Intersting
         token.safeTransferFrom(msg.sender, address(assetToken), amount);
     }
 
@@ -270,7 +283,7 @@ contract ThunderLoan is
         AssetToken assetToken = s_tokenToAssetToken[token];
         token.safeTransferFrom(msg.sender, address(assetToken), amount);
     }
-
+    //ok @audit Info:: need some netspec here
     function setAllowedToken(
         IERC20 token,
         bool allowed
@@ -279,6 +292,7 @@ contract ThunderLoan is
             if (address(s_tokenToAssetToken[token]) != address(0)) {
                 revert ThunderLoan__AlreadyAllowed();
             }
+            //Question what if they dont have name?
             string memory name = string.concat(
                 "ThunderLoan ",
                 IERC20Metadata(address(token)).name()
@@ -298,12 +312,14 @@ contract ThunderLoan is
             return assetToken;
         } else {
             AssetToken assetToken = s_tokenToAssetToken[token];
-            delete s_tokenToAssetToken[token];
+            delete s_tokenToAssetToken[token]; //Question does deleting a mapping will work right??
             emit AllowedTokenSet(token, assetToken, allowed);
             return assetToken;
         }
     }
 
+    //@audit Info:::Where is the netspec?
+    //Question is this calc fees for flash loans?
     function getCalculatedFee(
         IERC20 token,
         uint256 amount
@@ -323,6 +339,7 @@ contract ThunderLoan is
         s_flashLoanFee = newFee;
     }
 
+    // e is it ever unset poorly??
     function isAllowedToken(IERC20 token) public view returns (bool) {
         return address(s_tokenToAssetToken[token]) != address(0);
     }
