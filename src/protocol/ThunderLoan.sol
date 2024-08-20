@@ -321,15 +321,11 @@ contract ThunderLoan is
     }
 
     //@audit Info:::Where is the netspec?
-    //Question is this calc fees for flash loans?
-    //Answer yes it is calculating the fees for flash loans
     function getCalculatedFee(
         IERC20 token,
         uint256 amount
     ) public view returns (uint256 fee) {
         //slither-disable-next-line divide-before-multiply
-        //Look sus to me 
-        // usdc has 6 decimals only and weth has 18 weth
         //@audit Hight/Medium
         uint256 valueOfBorrowedToken = (amount *
             getPriceInWeth(address(token))) / s_feePrecision;
