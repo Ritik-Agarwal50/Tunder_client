@@ -171,13 +171,12 @@ contract ThunderLoan is
 
     // CHECKED TILL HERE
 
-
     /*//////////////////////////////////////////////////////////////
                            EXTERNAL FUNCTIONS
     //////////////////////////////////////////////////////////////*/
 
     //@audit low:: initializes can be front run.
-    // 
+    //
     function initialize(address tswapAddress) external initializer {
         __Ownable_init(msg.sender);
         __UUPSUpgradeable_init();
@@ -187,7 +186,7 @@ contract ThunderLoan is
     }
 
     //@audit Info::Where is the netspec??
-    //@audit follow up this is something sus happening!!!!!!! 
+    //@audit follow up this is something sus happening!!!!!!!
     function deposit(
         IERC20 token,
         uint256 amount
@@ -199,9 +198,8 @@ contract ThunderLoan is
         emit Deposit(msg.sender, token, amount);
         assetToken.mint(msg.sender, mintAmount);
         //Question why we are calcultaing flash loans fees in deposite function???
+        //@audit High :: calcultaing fees wrong
         uint256 calculatedFee = getCalculatedFee(token, amount);
-        //Question Why we are changing the Excahnge rate???
-        //Question is exchange rate should be the constant?
         assetToken.updateExchangeRate(calculatedFee);
         // e if the liquidty provider depo the $ sites in the assest token contract! Intersting
         token.safeTransferFrom(msg.sender, address(assetToken), amount);
@@ -210,6 +208,7 @@ contract ThunderLoan is
     /// @notice Withdraws the underlying token from the asset token
     /// @param token The token they want to withdraw from
     /// @param amountOfAssetToken The amount of the underlying they want to withdraw
+    // ✅ looks ok!!!!
     function redeem(
         IERC20 token,
         uint256 amountOfAssetToken
@@ -219,13 +218,15 @@ contract ThunderLoan is
         if (amountOfAssetToken == type(uint256).max) {
             amountOfAssetToken = assetToken.balanceOf(msg.sender);
         }
+        // 1e18 * 1e18 / 1e18 = 1e18
         uint256 amountUnderlying = (amountOfAssetToken * exchangeRate) /
             assetToken.EXCHANGE_RATE_PRECISION();
         emit Redeemed(msg.sender, token, amountOfAssetToken, amountUnderlying);
         assetToken.burn(msg.sender, amountOfAssetToken);
         assetToken.transferUnderlyingTo(msg.sender, amountUnderlying);
     }
-
+    //@audit info::where is the netspec?? 
+    //Looks decent to me but need to check function call 
     function flashloan(
         address receiverAddress,
         IERC20 token,
@@ -283,6 +284,7 @@ contract ThunderLoan is
         AssetToken assetToken = s_tokenToAssetToken[token];
         token.safeTransferFrom(msg.sender, address(assetToken), amount);
     }
+
     //ok @audit Info:: need some netspec here
     function setAllowedToken(
         IERC20 token,
@@ -320,11 +322,15 @@ contract ThunderLoan is
 
     //@audit Info:::Where is the netspec?
     //Question is this calc fees for flash loans?
+    //Answer yes it is calculating the fees for flash loans
     function getCalculatedFee(
         IERC20 token,
         uint256 amount
     ) public view returns (uint256 fee) {
         //slither-disable-next-line divide-before-multiply
+        //Look sus to me 
+        // usdc has 6 decimals only and weth has 18 weth
+        //@audit Hight/Medium
         uint256 valueOfBorrowedToken = (amount *
             getPriceInWeth(address(token))) / s_feePrecision;
         //slither-disable-next-line divide-before-multiply
